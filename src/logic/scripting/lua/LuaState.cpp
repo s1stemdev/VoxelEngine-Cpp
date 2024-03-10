@@ -1,11 +1,9 @@
 #include "LuaState.h"
 
+#include <iomanip>
 #include <iostream>
 #include "lua_util.h"
 #include "api_lua.h"
-#include "libgui.h"
-#include "libplayer.h"
-#include "libinventory.h"
 #include "../../../util/stringutil.h"
 
 lua::luaerror::luaerror(const std::string& message) : std::runtime_error(message) {
@@ -120,29 +118,14 @@ void lua::LuaState::createLibs() {
     openlib("world", worldlib, 0);
     openlib("player", playerlib, 0);
     openlib("inventory", inventorylib, 0);
+    openlib("block", blocklib, 0);
     openlib("item", itemlib, 0);
     openlib("time", timelib, 0);
     openlib("file", filelib, 0);
     openlib("gui", guilib, 0);
+    openlib("audio", audiolib, 0);
 
     addfunc("print", lua_wrap_errors<l_print>);
-
-    addfunc("block_index", lua_wrap_errors<l_block_index>);
-    addfunc("block_name", lua_wrap_errors<l_block_name>);
-    addfunc("blocks_count", lua_wrap_errors<l_blocks_count>);
-    addfunc("is_solid_at", lua_wrap_errors<l_is_solid_at>);
-    addfunc("is_replaceable_at", lua_wrap_errors<l_is_replaceable_at>);
-    addfunc("set_block", lua_wrap_errors<l_set_block>);
-    addfunc("get_block", lua_wrap_errors<l_get_block>);
-    addfunc("get_block_X", lua_wrap_errors<l_get_block_x>);
-    addfunc("get_block_Y", lua_wrap_errors<l_get_block_y>);
-    addfunc("get_block_Z", lua_wrap_errors<l_get_block_z>);
-    addfunc("get_block_states", lua_wrap_errors<l_get_block_states>);
-    addfunc("set_block_states", lua_wrap_errors<l_set_block_states>);
-    addfunc("get_block_rotation", lua_wrap_errors<l_get_block_rotation>);
-    addfunc("set_block_rotation", lua_wrap_errors<l_set_block_rotation>);
-    addfunc("get_block_user_bits", lua_wrap_errors<l_get_block_user_bits>);
-    addfunc("set_block_user_bits", lua_wrap_errors<l_set_block_user_bits>);
 }
 
 void lua::LuaState::loadbuffer(int env, const std::string& src, const std::string& file) {
@@ -235,8 +218,8 @@ int lua::LuaState::pushnil() {
     return 1;
 }
 
-bool lua::LuaState::getfield(const std::string& name) {
-    lua_getfield(L, -1, name.c_str());
+bool lua::LuaState::getfield(const std::string& name, int idx) {
+    lua_getfield(L, idx, name.c_str());
     if (lua_isnil(L, -1)) {
         lua_pop(L, -1);
         return false;
@@ -304,4 +287,29 @@ int lua::LuaState::createEnvironment(int parent) {
 void lua::LuaState::removeEnvironment(int id) {
     lua_pushnil(L);
     setglobal(envName(id));
+}
+
+void lua::LuaState::dumpStack() {
+    int top = gettop();
+    for (int i = 1; i <= top; i++) {
+        std::cout << std::setw(3) << i << std::setw(20) << luaL_typename(L, i) << std::setw(30);
+        switch (lua_type(L, i)) {
+            case LUA_TNUMBER:
+                std::cout << tonumber(i);
+                break;
+            case LUA_TSTRING:
+                std::cout << tostring(i);
+                break;
+            case LUA_TBOOLEAN:
+                std::cout << (toboolean(i) ? "true" : "false");
+                break;
+            case LUA_TNIL:
+                std::cout << "nil";
+                break;
+            default:
+                std::cout << lua_topointer(L, i);
+                break;
+        }
+        std::cout << std::endl;
+    }
 }

@@ -120,6 +120,26 @@ function color_mt.__tostring(self)
     return "rgba("..self[1]..", "..self[2]..", "..self[3]..", "..self[4]..")"
 end
 
+-- events
+events = {
+    handlers = {}
+}
+
+function events.on(event, func)
+    events.handlers[event] = events.handlers[event] or {}
+    table.insert(events.handlers[event], func)
+end
+
+function events.emit(event, ...)
+    result = nil
+    if events.handlers[event] then
+        for _, func in ipairs(events.handlers[event]) do
+            result = result or func(...)
+        end
+    end
+    return result
+end
+
 -- class designed for simple UI-nodes access via properties syntax
 local Element = {}
 function Element.new(docname, name)
@@ -142,3 +162,21 @@ function Document.new(docname)
         end
     })
 end
+
+-- Deprecated functions
+block_index = block.index
+block_name = block.name
+blocks_count = block.defs_count
+is_solid_at = block.is_solid_at
+is_replaceable_at = block.is_replaceable_at
+set_block = block.set
+get_block = block.get
+get_block_X = block.get_X
+get_block_Y = block.get_Y
+get_block_Z = block.get_Z
+get_block_states = block.get_states
+set_block_states = block.set_states
+get_block_rotation = block.get_rotation
+set_block_rotation = block.set_rotation
+get_block_user_bits = block.get_user_bits
+set_block_user_bits = block.set_user_bits

@@ -4,6 +4,7 @@
 #include <filesystem>
 #include "Assets.h"
 #include "AssetsLoader.h"
+#include "../audio/audio.h"
 #include "../files/files.h"
 #include "../files/engine_paths.h"
 #include "../coders/png.h"
@@ -19,13 +20,21 @@
 
 namespace fs = std::filesystem;
 
+static bool animation(
+    Assets* assets, 
+    const ResPaths* paths, 
+    const std::string directory, 
+    const std::string name,
+    Atlas* dstAtlas
+);
+
 bool assetload::texture(
     AssetsLoader&,
     Assets* assets,
     const ResPaths* paths,
     const std::string filename, 
     const std::string name,
-    std::shared_ptr<void>
+    std::shared_ptr<AssetCfg>
 ) {
     std::unique_ptr<Texture> texture(
         png::load_texture(paths->find(filename).u8string())
@@ -44,7 +53,7 @@ bool assetload::shader(
     const ResPaths* paths,
     const std::string filename, 
     const std::string name,
-    std::shared_ptr<void>
+    std::shared_ptr<AssetCfg>
 ) {
     fs::path vertexFile = paths->find(filename+".glslv");
     fs::path fragmentFile = paths->find(filename+".glslf");
@@ -92,7 +101,7 @@ bool assetload::atlas(
     const ResPaths* paths,
     const std::string directory, 
     const std::string name,
-    std::shared_ptr<void>
+    std::shared_ptr<AssetCfg>
 ) {
     AtlasBuilder builder;
     for (const auto& file : paths->listdir(directory)) {
@@ -101,7 +110,7 @@ bool assetload::atlas(
     Atlas* atlas = builder.build(2);
     assets->store(atlas, name);
     for (const auto& file : builder.getNames()) {
-        assetload::animation(assets, paths, "textures", file, atlas);
+        animation(assets, paths, "textures", file, atlas);
     }
     return true;
 }
@@ -112,7 +121,7 @@ bool assetload::font(
     const ResPaths* paths,
     const std::string filename, 
     const std::string name,
-    std::shared_ptr<void>
+    std::shared_ptr<AssetCfg>
 ) {
     std::vector<std::unique_ptr<Texture>> pages;
     for (size_t i = 0; i <= 4; i++) {
@@ -127,7 +136,7 @@ bool assetload::font(
         }
         pages.push_back(std::move(texture));
     }
-    int res = pages[0]->height / 16;
+    int res = pages[0]->getHeight() / 16;
     assets->store(new Font(std::move(pages), res, 4), name);
     return true;
 }
@@ -138,10 +147,10 @@ bool assetload::layout(
     const ResPaths* paths,
     const std::string file,
     const std::string name,
-    std::shared_ptr<void> config
+    std::shared_ptr<AssetCfg> config
 ) {
     try {
-        LayoutCfg* cfg = reinterpret_cast<LayoutCfg*>(config.get());
+        auto cfg = dynamic_cast<LayoutCfg*>(config.get());
         auto document = UiDocument::read(loader, cfg->env, name, file);
         assets->store(document.release(), name);
         return true;
@@ -151,12 +160,58 @@ bool assetload::layout(
         return false;
     }
 }
+bool assetload::sound(
+    AssetsLoader& loader,
+    Assets* assets,
+    const ResPaths* paths,
+    const std::string file,
+    const std::string name,
+    std::shared_ptr<AssetCfg> config
+) {
+    auto cfg = dynamic_cast<SoundCfg*>(config.get());
+    bool keepPCM = cfg ? cfg->keepPCM : false;
 
-bool assetload::animation(Assets* assets, 
-                        const ResPaths* paths, 
-                        const std::string directory, 
-                        const std::string name,
-                        Atlas* dstAtlas) {
+    size_t lastindex = file.find_last_of("."); 
+    std::string extension = file.substr(lastindex);
+    std::string extensionless = file.substr(0, lastindex);
+    try {
+        std::unique_ptr<audio::Sound> baseSound = nullptr;
+
+        // looking for 'sound_name' as base sound
+        auto soundFile = paths->find(file);
+        if (fs::exists(soundFile)) {
+            baseSound.reset(audio::load_sound(soundFile, keepPCM));
+        }
+        // looking for 'sound_name_0' as base sound
+        auto variantFile = paths->find(extensionless+"_0"+extension);
+        if (fs::exists(variantFile)) {
+            baseSound.reset(audio::load_sound(variantFile, keepPCM));
+        }
+
+        // loading sound variants
+        for (uint i = 1; ; i++) {
+            auto variantFile = paths->find(extensionless+"_"+std::to_string(i)+extension);
+            if (!fs::exists(variantFile)) {
+                break;
+            }
+            baseSound->variants.emplace_back(audio::load_sound(variantFile, keepPCM));
+        }
+        assets->store(baseSound.release(), name);
+    } 
+    catch (std::runtime_error& err) {
+        std::cerr << err.what() << std::endl;
+        return false;
+    }
+    return true;
+}
+
+static bool animation(
+    Assets* assets, 
+    const ResPaths* paths, 
+    const std::string directory, 
+    const std::string name,
+    Atlas* dstAtlas
+) {
     std::string animsDir = directory + "/animations";
     std::string blocksDir = directory + "/blocks";
 
@@ -215,13 +270,19 @@ bool assetload::animation(Assets* assets,
         Frame frame;
         UVRegion region = dstAtlas->get(name);
 
-        frame.dstPos = glm::ivec2(region.u1 * dstTex->width, region.v1 * dstTex->height);
-        frame.size = glm::ivec2(region.u2 * dstTex->width, region.v2 * dstTex->height) - frame.dstPos;
+        uint dstWidth = dstTex->getWidth();
+        uint dstHeight = dstTex->getHeight();
+
+        uint srcWidth = srcTex->getWidth();
+        uint srcHeight = srcTex->getHeight();
+
+        frame.dstPos = glm::ivec2(region.u1 * dstWidth, region.v1 * dstHeight);
+        frame.size = glm::ivec2(region.u2 * dstWidth, region.v2 * dstHeight) - frame.dstPos;
 
         if (frameList.empty()) {
             for (const auto& elem : builder.getNames()) {
                 region = srcAtlas->get(elem);
-                frame.srcPos = glm::ivec2(region.u1 * srcTex->width, srcTex->height - region.v2 * srcTex->height);
+                frame.srcPos = glm::ivec2(region.u1 * srcWidth, srcHeight - region.v2 * srcHeight);
                 animation.addFrame(frame);
             }
         }
@@ -233,7 +294,7 @@ bool assetload::animation(Assets* assets,
                 }
                 region = srcAtlas->get(elem.first);
                 frame.duration = elem.second;
-                frame.srcPos = glm::ivec2(region.u1 * srcTex->width, srcTex->height - region.v2 * srcTex->height);
+                frame.srcPos = glm::ivec2(region.u1 * srcWidth, srcHeight - region.v2 * srcHeight);
                 animation.addFrame(frame);
             }
         }

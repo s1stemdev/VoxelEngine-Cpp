@@ -17,8 +17,8 @@
 #include <limits.h>
 #include <vector>
 
-Chunks::Chunks(int w, int d, 
-			   int ox, int oz, 
+Chunks::Chunks(uint32_t w, uint32_t d, 
+			   int32_t ox, int32_t oz, 
 			   WorldFiles* wfile, 
 			   LevelEvents* events, 
 			   const Content* content) 
@@ -32,13 +32,13 @@ Chunks::Chunks(int w, int d,
 	chunksCount = 0;
 }
 
-voxel* Chunks::get(int x, int y, int z){
+voxel* Chunks::get(int32_t x, int32_t y, int32_t z) {
 	x -= ox * CHUNK_W; 
 	z -= oz * CHUNK_D;
 	int cx = floordiv(x, CHUNK_W);
 	int cy = floordiv(y, CHUNK_H);
 	int cz = floordiv(z, CHUNK_D);
-	if (cx < 0 || cy < 0 || cz < 0 || cx >= w || cy >= 1 || cz >= d)
+	if (cx < 0 || cy < 0 || cz < 0 || cx >= int(w) || cy >= 1 || cz >= int(d))
 		return nullptr;
 	std::shared_ptr<Chunk> chunk = chunks[cz * w + cx];
 	if (chunk == nullptr)
@@ -55,8 +55,12 @@ const AABB* Chunks::isObstacleAt(float x, float y, float z){
 	int iz = floor(z);
 	voxel* v = get(ix, iy, iz);
 	if (v == nullptr) {
-        static const AABB empty;
-		return &empty;
+		if (iy >= CHUNK_H) {
+			return nullptr;
+		} else {
+        	static const AABB empty;
+			return &empty;
+		}
     }
 	const Block* def = contentIds->getBlockDef(v->id);
 	if (def->obstacle) {
@@ -71,34 +75,34 @@ const AABB* Chunks::isObstacleAt(float x, float y, float z){
 	return nullptr;
 }
 
-bool Chunks::isSolidBlock(int x, int y, int z) {
+bool Chunks::isSolidBlock(int32_t x, int32_t y, int32_t z) {
     voxel* v = get(x, y, z);
     if (v == nullptr)
         return false;
     return contentIds->getBlockDef(v->id)->rt.solid;
 }
 
-bool Chunks::isReplaceableBlock(int x, int y, int z) {
+bool Chunks::isReplaceableBlock(int32_t x, int32_t y, int32_t z) {
     voxel* v = get(x, y, z);
     if (v == nullptr)
         return false;
     return contentIds->getBlockDef(v->id)->replaceable;
 }
 
-bool Chunks::isObstacleBlock(int x, int y, int z) {
+bool Chunks::isObstacleBlock(int32_t x, int32_t y, int32_t z) {
 	voxel* v = get(x, y, z);
 	if (v == nullptr)
 		return false;
 	return contentIds->getBlockDef(v->id)->obstacle;
 }
 
-ubyte Chunks::getLight(int x, int y, int z, int channel){
+ubyte Chunks::getLight(int32_t x, int32_t y, int32_t z, int channel){
 	x -= ox * CHUNK_W;
 	z -= oz * CHUNK_D;
 	int cx = floordiv(x, CHUNK_W);
 	int cy = floordiv(y, CHUNK_H);
 	int cz = floordiv(z, CHUNK_D);
-	if (cx < 0 || cy < 0 || cz < 0 || cx >= w || cy >= 1 || cz >= d)
+	if (cx < 0 || cy < 0 || cz < 0 || cx >= int(w) || cy >= 1 || cz >= int(d))
 		return 0;
 	auto chunk = chunks[(cy * d + cz) * w + cx];
 	if (chunk == nullptr)
@@ -106,16 +110,16 @@ ubyte Chunks::getLight(int x, int y, int z, int channel){
 	int lx = x - cx * CHUNK_W;
 	int ly = y - cy * CHUNK_H;
 	int lz = z - cz * CHUNK_D;
-	return chunk->lightmap.get(lx,ly,lz, channel);
+	return chunk->lightmap.get(lx, ly, lz, channel);
 }
 
-light_t Chunks::getLight(int x, int y, int z){
+light_t Chunks::getLight(int32_t x, int32_t y, int32_t z){
 	x -= ox * CHUNK_W;
 	z -= oz * CHUNK_D;
 	int cx = floordiv(x, CHUNK_W);
 	int cy = floordiv(y, CHUNK_H);
 	int cz = floordiv(z, CHUNK_D);
-	if (cx < 0 || cy < 0 || cz < 0 || cx >= w || cy >= 1 || cz >= d)
+	if (cx < 0 || cy < 0 || cz < 0 || cx >= int(w) || cy >= 1 || cz >= int(d))
 		return 0;
 	auto chunk = chunks[(cy * d + cz) * w + cx];
 	if (chunk == nullptr)
@@ -126,14 +130,14 @@ light_t Chunks::getLight(int x, int y, int z){
 	return chunk->lightmap.get(lx,ly,lz);
 }
 
-Chunk* Chunks::getChunkByVoxel(int x, int y, int z){
+Chunk* Chunks::getChunkByVoxel(int32_t x, int32_t y, int32_t z){
 	if (y < 0 || y >= CHUNK_H)
 		return nullptr;
 	x -= ox * CHUNK_W;
 	z -= oz * CHUNK_D;
 	int cx = floordiv(x, CHUNK_W);
 	int cz = floordiv(z, CHUNK_D);
-	if (cx < 0 || cz < 0 || cx >= w || cz >= d)
+	if (cx < 0 || cz < 0 || cx >= int(w) || cz >= int(d))
 		return nullptr;
 	return chunks[cz * w + cx].get();
 }
@@ -141,19 +145,19 @@ Chunk* Chunks::getChunkByVoxel(int x, int y, int z){
 Chunk* Chunks::getChunk(int x, int z){
 	x -= ox;
 	z -= oz;
-	if (x < 0 || z < 0 || x >= w || z >= d)
+	if (x < 0 || z < 0 || x >= int(w) || z >= int(d))
 		return nullptr;
 	return chunks[z * w + x].get();
 }
 
-void Chunks::set(int x, int y, int z, int id, uint8_t states){
+void Chunks::set(int32_t x, int32_t y, int32_t z, uint32_t id, uint8_t states){
 	if (y < 0 || y >= CHUNK_H)
 		return;
 	x -= ox * CHUNK_W;
 	z -= oz * CHUNK_D;
 	int cx = floordiv(x, CHUNK_W);
 	int cz = floordiv(z, CHUNK_D);
-	if (cx < 0 || cz < 0 || cx >= w || cz >= d)
+	if (cx < 0 || cz < 0 || cx >= int(w) || cz >= int(d))
 		return;
 	Chunk* chunk = chunks[cz * w + cx].get();
 	if (chunk == nullptr)
@@ -396,7 +400,7 @@ glm::vec3 Chunks::rayCastToObstacle(glm::vec3 start, glm::vec3 dir, float maxDis
 }
 
 
-void Chunks::setCenter(int x, int z) {
+void Chunks::setCenter(int32_t x, int32_t z) {
 	int cx = floordiv(x, CHUNK_W);
 	int cz = floordiv(z, CHUNK_D);
 	cx -= ox + w / 2;
@@ -406,18 +410,18 @@ void Chunks::setCenter(int x, int z) {
 	}
 }
 
-void Chunks::translate(int dx, int dz){
+void Chunks::translate(int32_t dx, int32_t dz) {
 	for (uint i = 0; i < volume; i++){
 		chunksSecond[i] = nullptr;
 	}
-	for (int z = 0; z < d; z++){
-		for (int x = 0; x < w; x++){
+	for (uint32_t z = 0; z < d; z++){
+		for (uint32_t x = 0; x < w; x++){
 			auto chunk = chunks[z * w + x];
 			int nx = x - dx;
 			int nz = z - dz;
 			if (chunk == nullptr)
 				continue;
-			if (nx < 0 || nz < 0 || nx >= w || nz >= d){
+			if (nx < 0 || nz < 0 || nx >= int(w) || nz >= int(d)){
 				events->trigger(EVT_CHUNK_HIDDEN, chunk.get());
 				if (worldFiles)
 					worldFiles->put(chunk.get());
@@ -433,7 +437,7 @@ void Chunks::translate(int dx, int dz){
 	oz += dz;
 }
 
-void Chunks::resize(int newW, int newD) {
+void Chunks::resize(uint32_t newW, uint32_t newD) {
 	if (newW < w) {
 		int delta = w - newW;
 		translate(delta / 2, 0);
@@ -449,8 +453,8 @@ void Chunks::resize(int newW, int newD) {
 	const int newVolume = newW * newD;
     std::vector<std::shared_ptr<Chunk>> newChunks(newVolume);
     std::vector<std::shared_ptr<Chunk>> newChunksSecond(newVolume);
-	for (int z = 0; z < d && z < newD; z++) {
-		for (int x = 0; x < w && x < newW; x++) {
+	for (int z = 0; z < int(d) && z < int(newD); z++) {
+		for (int x = 0; x < int(w) && x < int(newW); x++) {
 			newChunks[z * newW + x] = chunks[z * w + x];
 		}
 	}
@@ -461,7 +465,7 @@ void Chunks::resize(int newW, int newD) {
     chunksSecond = std::move(newChunksSecond);
 }
 
-void Chunks::_setOffset(int x, int z){
+void Chunks::_setOffset(int32_t x, int32_t z) {
 	ox = x;
 	oz = z;
 }
@@ -471,7 +475,7 @@ bool Chunks::putChunk(std::shared_ptr<Chunk> chunk) {
 	int z = chunk->z;
 	x -= ox;
 	z -= oz;
-	if (x < 0 || z < 0 || x >= w || z >= d)
+	if (x < 0 || z < 0 || x >= int(w) || z >= int(d))
 		return false;
 	chunks[z * w + x] = chunk;
 	chunksCount++;

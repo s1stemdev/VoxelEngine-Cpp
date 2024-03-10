@@ -1,4 +1,5 @@
-#include "libgui.h"
+#include "lua_commons.h"
+#include "api_lua.h"
 
 #include <iostream>
 #include "../scripting.h"
@@ -161,7 +162,7 @@ static bool setattr(lua_State* L, gui::Label* label, const std::string& attr) {
     return false;
 }
 
-int l_gui_getattr(lua_State* L) {
+static int l_gui_getattr(lua_State* L) {
     auto docname = lua_tostring(L, 1);
     auto element = lua_tostring(L, 2);
     const std::string attr = lua_tostring(L, 3);
@@ -170,7 +171,7 @@ int l_gui_getattr(lua_State* L) {
     if (attr == "color") {
         return lua::pushcolor_arr(L, node->getColor());
     } else if (attr == "pos") {
-        return lua::pushvec2_arr(L, node->getCoord());
+        return lua::pushvec2_arr(L, node->getPos());
     } else if (attr == "size") {
         return lua::pushvec2_arr(L, node->getSize());
     } else if (attr == "hoverColor") {
@@ -197,19 +198,19 @@ int l_gui_getattr(lua_State* L) {
     return 0;
 }
 
-int l_gui_getviewport(lua_State* L) {
+static int l_gui_getviewport(lua_State* L) {
     lua::pushvec2_arr(L, scripting::engine->getGUI()->getContainer()->getSize());
     return 1;
 }
 
-int l_gui_setattr(lua_State* L) {
+static int l_gui_setattr(lua_State* L) {
     auto docname = lua_tostring(L, 1);
     auto element = lua_tostring(L, 2);
     const std::string attr = lua_tostring(L, 3);
 
     auto node = getDocumentNode(L, docname, element);
     if (attr == "pos") {
-        node->setCoord(lua::tovec2(L, 4));
+        node->setPos(lua::tovec2(L, 4));
     } else if (attr == "size") {
         node->setSize(lua::tovec2(L, 4));
     } else if (attr == "color") {
@@ -235,7 +236,7 @@ int l_gui_setattr(lua_State* L) {
     return 0;
 }
 
-int l_gui_get_env(lua_State* L) {
+static int l_gui_get_env(lua_State* L) {
     auto name = lua_tostring(L, 1);
     auto doc = scripting::engine->getAssets()->getLayout(name);
     if (doc == nullptr) {
@@ -244,3 +245,11 @@ int l_gui_get_env(lua_State* L) {
     lua_getglobal(L, lua::LuaState::envName(doc->getEnvironment()).c_str());
     return 1;
 }
+
+const luaL_Reg guilib [] = {
+    {"get_viewport", lua_wrap_errors<l_gui_getviewport>},
+    {"getattr", lua_wrap_errors<l_gui_getattr>},
+    {"setattr", lua_wrap_errors<l_gui_setattr>},
+    {"get_env", lua_wrap_errors<l_gui_get_env>},
+    {NULL, NULL}
+};

@@ -43,6 +43,7 @@ struct SlotLayout {
     glm::vec2 position;
     bool background;
     bool itemSource;
+    slotcallback updateFunc;
     slotcallback shareFunc;
     slotcallback rightClick;
     int padding = 0;
@@ -51,6 +52,7 @@ struct SlotLayout {
                glm::vec2 position, 
                bool background,
                bool itemSource,
+               slotcallback updateFunc,
                slotcallback shareFunc,
                slotcallback rightClick);
 };
@@ -73,7 +75,7 @@ public:
     bool isHighlighted() const;
 
     virtual void clicked(gui::GUI*, mousecode) override;
-    virtual void focus(gui::GUI*) override;
+    virtual void onFocus(gui::GUI*) override;
 
     void bind(
         int64_t inventoryid,
@@ -101,7 +103,7 @@ public:
 
     void setInventory(std::shared_ptr<Inventory> inventory);
 
-    virtual void setCoord(glm::vec2 coord) override;
+    virtual void setPos(glm::vec2 pos) override;
 
     void setOrigin(glm::vec2 origin);
     glm::vec2 getOrigin() const;
@@ -113,6 +115,8 @@ public:
         LevelFrontend* frontend, 
         InventoryInteraction* interaction
     );
+    
+    void unbind();
 
     std::shared_ptr<SlotView> addSlot(SlotLayout layout);
 
@@ -133,7 +137,7 @@ public:
 
     void addGrid(
         int cols, int count, 
-        glm::vec2 coord, 
+        glm::vec2 pos, 
         int padding,
         bool addpanel,
         SlotLayout slotLayout

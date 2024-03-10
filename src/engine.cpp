@@ -10,7 +10,7 @@
 #include <functional>
 #define GLEW_STATIC
 
-#include "audio/Audio.h"
+#include "audio/audio.h"
 #include "assets/Assets.h"
 #include "assets/AssetsLoader.h"
 #include "world/WorldGenerators.h"
@@ -56,6 +56,11 @@ Engine::Engine(EngineSettings& settings, EnginePaths* paths)
 	if (Window::initialize(settings.display)){
 		throw initialize_error("could not initialize window");
 	}
+    audio::initialize(true);
+    audio::create_channel("regular");
+    audio::create_channel("music");
+    audio::create_channel("ambient");
+    audio::create_channel("ui");
 
     auto resdir = paths->getResources();
     scripting::initialize(this);
@@ -65,7 +70,6 @@ Engine::Engine(EngineSettings& settings, EnginePaths* paths)
 
     resPaths = std::make_unique<ResPaths>(resdir, roots);
     assets = std::make_unique<Assets>();
-
 
 	AssetsLoader loader(assets.get(), resPaths.get());
 	AssetsLoader::addDefaults(loader, nullptr);
@@ -79,8 +83,6 @@ Engine::Engine(EngineSettings& settings, EnginePaths* paths)
 			throw initialize_error("could not to load assets");
 		}
 	}
-
-	Audio::initialize();
 	gui = std::make_unique<gui::GUI>();
     if (settings.ui.language == "auto") {
         settings.ui.language = langs::locale_by_envlocale(platform::detect_locale(), paths->getResources());
@@ -123,6 +125,8 @@ void Engine::mainloop() {
 		assert(screen != nullptr);
 		updateTimers();
 		updateHotkeys();
+        
+        audio::update(delta);
 
 		gui->act(delta);
 		screen->update(delta);
@@ -147,16 +151,22 @@ Engine::~Engine() {
     std::cout << "-- shutting down" << std::endl;
 	screen.reset();
 	content.reset();
-
-	Audio::finalize();
     assets.reset();
+	audio::close();
     scripting::close();
 	Window::terminate();
 	std::cout << "-- engine finished" << std::endl;
 }
 
-inline const std::string checkPacks(const std::unordered_set<std::string>& packs, const std::vector<std::string>& dependencies) {
-    for (const std::string& str : dependencies) if (packs.find(str) == packs.end()) return str;
+inline const std::string checkPacks(
+    const std::unordered_set<std::string>& packs, 
+    const std::vector<std::string>& dependencies
+) {
+    for (const std::string& str : dependencies) { 
+        if (packs.find(str) == packs.end()) {
+            return str;
+        }
+    }
     return "";
 }
 
@@ -172,15 +182,20 @@ void Engine::loadContent() {
 
 	std::string missingDependency;
 	std::unordered_set<std::string> loadedPacks, existingPacks;
-	for (const auto& item : srcPacks) { existingPacks.insert(item.id); }
+	for (const auto& item : srcPacks) {
+         existingPacks.insert(item.id);
+    }
 
-	while(existingPacks.size() > loadedPacks.size()) {
+	while (existingPacks.size() > loadedPacks.size()) {
 		for (auto& pack : srcPacks) {
-			if(loadedPacks.find(pack.id) != loadedPacks.end()) continue;
+			if(loadedPacks.find(pack.id) != loadedPacks.end()) {
+                continue;
+            }
 			missingDependency = checkPacks(existingPacks, pack.dependencies);
-			if(!missingDependency.empty()) 
+			if (!missingDependency.empty()) { 
                 throw contentpack_error(pack.id, pack.folder, "missing dependency '"+missingDependency+"'");
-			if(pack.dependencies.empty() || checkPacks(loadedPacks, pack.dependencies).empty()) {
+            }
+			if (pack.dependencies.empty() || checkPacks(loadedPacks, pack.dependencies).empty()) {
 				loadedPacks.insert(pack.id);
 				resRoots.push_back(pack.folder);
 				contentPacks.push_back(pack);
@@ -226,6 +241,8 @@ double Engine::getDelta() const {
 }
 
 void Engine::setScreen(std::shared_ptr<Screen> screen) {
+    audio::reset_channel(audio::get_channel_index("regular"));
+    audio::reset_channel(audio::get_channel_index("ambient"));
 	this->screen = screen;
 }
 
@@ -257,6 +274,10 @@ std::vector<ContentPack>& Engine::getContentPacks() {
 
 EnginePaths* Engine::getPaths() {
 	return paths;
+}
+
+ResPaths* Engine::getResPaths() {
+    return resPaths.get();
 }
 
 std::shared_ptr<Screen> Engine::getScreen() {
